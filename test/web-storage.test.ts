@@ -51,28 +51,57 @@ Deno.test("WebStorage", async (test) => {
     });
   });
 
-  await test.step("Item Management", async (test) => {
+  await test.step("Synchronous Item Management", async (test) => {
     const storage = WebStorage.getSession();
+    storage.clearSync();
 
-    await test.step("setItem() & getItem() should work as expected", () => {
-      storage.setItem("test", "test");
+    await test.step("setting and getting items should work as expected", () => {
+      storage.setItemSync("test", "test");
       assertEquals(storage.length, 1);
       assertEquals(storage.hasKey("test"), true);
-      assertEquals(storage.getItem<string>("test"), "test");
+      assertEquals(storage.getItemSync<string>("test"), "test");
     });
 
-    await test.step("removeItem() should work as expected", () => {
-      storage.setItem("test", "test");
-      storage.removeItem("test");
+    await test.step("removing items should work as expected", () => {
+      storage.setItemSync("test", "test");
+      storage.removeItemSync("test");
       assertEquals(storage.length, 0);
       assertEquals(storage.hasKey("test"), false);
-      assertEquals(storage.getItem<string>("test"), null);
+      assertEquals(storage.getItemSync<string>("test"), null);
     });
 
-    await test.step("clear() should work as expected", () => {
-      storage.setItem("test", "test");
-      storage.clear();
+    await test.step("clearing storage should work as expected", () => {
+      storage.setItemSync("test", "test");
+      storage.clearSync();
       assertEquals(storage.length, 0);
     })
+  });
+
+  await test.step("Asynchronous Item Management", async (test) => {
+    const storage = WebStorage.getSession();
+    await storage.clear();
+
+    await test.step("setting and getting many items should work as expected", async () => {
+      const itemCount = 1000;
+
+      const setItemPromises = [];
+      for (let i = 1; i <= itemCount; i++) {
+        setItemPromises.push(storage.setItem("test" + i, i));
+      }
+
+      await Promise.all(setItemPromises);
+
+      assertEquals(storage.length, itemCount);
+      for (let i = 1; i <= itemCount; i++) {
+        const value = await storage.getItem<number>("test" + i);
+        assertEquals(value, i);
+      }
+    });
+
+    await test.step("removing items should work as expected", async () => {
+      await storage.setItem("test", "test");
+      await storage.removeItem("test");
+      assertEquals(storage.hasKey("test"), false);
+    });
   });
 });

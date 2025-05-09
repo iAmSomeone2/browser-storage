@@ -5,6 +5,15 @@
   "exports": {
     "./web-storage": "./src/web-storage.ts"
   },
+  "publish": {
+    "include": [
+      "src/",
+      "test/",
+      "LICENSE",
+      "README.md",
+      "deno.json"
+    ]
+  },
   "include": [
     "src/"
   ],
@@ -30,7 +39,8 @@
   "tasks": {
     "dev": "deno run --watch main.ts",
     "test:unit": "deno test --coverage=\"coverage\"",
-    "gen-docs": "rm -rf docs && deno doc --html --output=\"docs\" src/"
+    "gen-docs": "rm -rf docs && deno doc --html --output=\"docs\" src/",
+    "bench": "deno bench bench/"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1",

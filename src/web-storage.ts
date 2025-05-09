@@ -1,13 +1,38 @@
 /**
  * # Web Storage
  *
- * A wrapper library for the standard Web Storage API.
+ * Wrapper logic for the standard "Local" and "Session" Storage objects.
  *
+ * # Examples
+ *
+ * @example Using `localStorage` to persist an Object
+ * ```ts
+ * // Define some data to store
+ * interface User {
+ *  name: string;
+ *  age: number;
+ * }
+ *
+ * const john: User = { name: "John Doe", age: 30 };
+ *
+ * // Get the local storage instance
+ * const localStorage = WebStorage.getLocal();
+ * await localStorage.setItem("currentUser", john);
+ *
+ * // Retrieve the stored data sometime later...
+ * const currentUser = await localStorage.getItem<User>("currentUser");
+ * console.assert(currentUser?.name === "John Doe");
+ * ```
+ *
+ * @since 0.1.0
  * @module web-storage
  */
 
 /**
  * Browser storage types.
+ *
+ * @since 0.1.0
+ * @public
  */
 export enum StorageType {
   /**
@@ -74,10 +99,30 @@ export class StorageNotAvailableError extends Error {
 }
 
 /**
- * Browser storage manager
+ * Browser storage manager.
+ *
+ * @example Using `localStorage` to persist an Object
+ * ```ts
+ * // Define some data to store
+ * interface User {
+ *  name: string;
+ *  age: number;
+ * }
+ *
+ * const john: User = { name: "John Doe", age: 30 };
+ *
+ * // Get the local storage instance
+ * const localStorage = WebStorage.getLocal();
+ * await localStorage.setItem("currentUser", john);
+ *
+ * // Retrieve the stored data sometime later...
+ * const currentUser = await localStorage.getItem<User>("currentUser");
+ * console.assert(currentUser?.name === "John Doe");
+ * ```
+ *
+ * @since 0.1.0
  */
 export default class WebStorage {
-
   /**
    * Tests whether a given {@link StorageType} is available in the current context.
    *
@@ -217,6 +262,7 @@ export default class WebStorage {
   /**
    * Reference to the browser {@link Storage} object for this instance's {@link StorageType}.
    * @private
+   * @internal
    */
   private readonly storage: Storage;
 
@@ -237,9 +283,20 @@ export default class WebStorage {
   /**
    * Set of keys in the storage instance.
    * @private
+   * @internal
    */
   private readonly keys: Set<string> = new Set();
 
+  /**
+   * Creates a new {@link WebStorage} instance.
+   *
+   * @remarks
+   * Library consumers should not call this constructor directly. Instead, use {@link WebStorage.getLocal} or
+   * {@link WebStorage.getSession}.
+   *
+   * @private
+   * @internal
+   */
   private constructor(storageType: StorageType) {
     this.storageType = storageType;
     switch (storageType) {
@@ -265,7 +322,6 @@ export default class WebStorage {
    *
    * @param key key to check
    * @returns `true` if the key is present, `false` otherwise
-   *
    */
   public hasKey(key: string): boolean {
     return this.keys.has(key);
@@ -274,14 +330,16 @@ export default class WebStorage {
   /**
    * When passed a key name and value, will add that key to the storage or update that key's value if it already exists.
    *
-   * @example
+   * This is the synchronous version of {@link setItem}.
+   *
+   * @example Set a primitive value
    * ```ts ignore
-   * localStorage.setItem('theAnswer', 42);
+   * localStorage.setItemSync('theAnswer', 42);
    * ```
    *
-   * @example
+   * @example Set an object value
    * ```ts ignore
-   * localStorage.setItem('key', { foo: 'bar' });
+   * localStorage.setItemSync('key', { foo: 'bar' });
    * ```
    *
    * @remarks
@@ -290,34 +348,78 @@ export default class WebStorage {
    * @param key name of the key to create or update
    * @param value the value to store or overwrite
    *
-   * @throws {DOMException} `QuotaExceededError` if the storage quota has been met.
-   * @throws {TypeError} in one of the following cases:
+   * @throws DOMException `QuotaExceededError` if the storage quota has been met.
+   * @throws TypeError in one of the following cases:
    *   - `value` contains a circular reference
    *   - a {@link BigInt} value is somewhere within `value`
    */
-  public setItem(key: string, value: unknown): void {
+  public setItemSync<T>(key: string, value: T): void {
     const stringifiedValue = JSON.stringify(value);
     this.storage.setItem(key, stringifiedValue);
     this.keys.add(key);
   }
 
   /**
-   * When passed a key name, will return that key's value, or `null` if the key does not exist.
+   * When passed a key name and value, will add that key to the storage or update that key's value if it already exists.
    *
-   * @example
+   * Asynchronous version of {@link setItemSync}.
+   *
+   * @example Set a primitive value
    * ```ts ignore
-   * localStorage.getItem<number>('theAnswer'); // 42
+   * await localStorage.setItem('theAnswer', 42);
    * ```
    *
-   * @example
+   * @example Set an object value and catch any errors
    * ```ts ignore
-   * localStorage.getItem<Record<string, unknown>>('key'); // { foo: 'bar' }
+   * localStorage.setItem('key', { foo: 'bar' })
+   *  .catch((error) => {
+   *    if (error instanceof DOMException) {
+   *       console.error("Quota exceeded");
+   *     }
+   *  });
+   * ```
+   *
+   * @remarks
+   * `value` is fed through {@link JSON.stringify} before being stored.
+   *
+   * @param key name of the key to create or update
+   * @param value the value to store or overwrite
+   *
+   * @throws DOMException `QuotaExceededError` if the storage quota has been met.
+   * @throws TypeError in one of the following cases:
+   *   - `value` contains a circular reference
+   *   - a {@link BigInt} value is somewhere within `value`
+   */
+  public setItem<T>(key: string, value: T): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        this.setItemSync(key, value);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * When passed a key name, will return that key's value, or `null` if the key does not exist.
+   *
+   * Synchronous version of {@link getItem}.
+   *
+   * @example Get a primitive value
+   * ```ts ignore
+   * localStorage.getItemSync<number>('theAnswer'); // 42
+   * ```
+   *
+   * @example Get an object value
+   * ```ts ignore
+   * localStorage.getItemSync<Record<string, unknown>>('key'); // { foo: 'bar' }
    * ```
    *
    * @param key name of the key to retrieve the value of
    * @returns the value of the key, or `null` if the key does not exist
    */
-  public getItem<T>(key: string): T | null {
+  public getItemSync<T>(key: string): T | null {
     if (!this.hasKey(key)) return null;
 
     const stringifiedValue = this.storage.getItem(key)!;
@@ -325,23 +427,86 @@ export default class WebStorage {
   }
 
   /**
+   * When passed a key name, will return that key's value, or `null` if the key does not exist.
+   *
+   * Asynchronous version of {@link getItemSync}.
+   *
+   * @example Get a primitive value
+   * ```ts ignore
+   * const theAnswer = await localStorage.getItem<number>('theAnswer'); // 42
+   * ```
+   *
+   * @example Get an object value
+   *
+   * ```ts ignore
+   * const fooBar = await localStorage.getItem<Record<string, unknown>>('key'); // { foo: 'bar' }
+   * ```
+   *
+   * @param key name of the key to retrieve the value of
+   * @returns the value of the key, or `null` if the key does not exist
+   */
+  public getItem<T>(key: string): Promise<T | null> {
+    return new Promise((resolve, reject) => {
+      try {
+        const value = this.getItemSync<T>(key);
+        resolve(value);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * Removes a key/value pair from the storage instance if it exists.
+   *
+   * Synchronous version of {@link removeItem}.
    *
    * @remarks
    * Does nothing if the key does not exist.
    *
    * @param key name of the key to remove
    */
-  public removeItem(key: string): void {
+  public removeItemSync(key: string): void {
     this.storage.removeItem(key);
     this.keys.delete(key);
   }
 
   /**
-   * Removes all keys/value pairs from the storage instance.
+   * Removes a key/value pair from the storage instance if it exists.
+   *
+   * Asynchronous version of {@link removeItemSync}.
+   *
+   * @remarks
+   * Does nothing if the key does not exist.
+   *
+   * @param key name of the key to remove
    */
-  public clear(): void {
+  public removeItem(key: string): Promise<void> {
+    return new Promise((resolve, _reject) => {
+      this.removeItemSync(key);
+      resolve();
+    });
+  }
+
+  /**
+   * Removes all keys/value pairs from the storage instance.
+   *
+   * Synchronous version of {@link clear}.
+   */
+  public clearSync(): void {
     this.storage.clear();
     this.keys.clear();
+  }
+
+  /**
+   * Removes all keys/value pairs from the storage instance.
+   *
+   * Asynchronous version of {@link clearSync}.
+   */
+  public clear(): Promise<void> {
+    return new Promise((resolve, _reject) => {
+      this.clearSync();
+      resolve();
+    });
   }
 }
