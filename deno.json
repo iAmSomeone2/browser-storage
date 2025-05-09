@@ -1,14 +1,10 @@
 {
-  "name": "browser-storage",
+  "name": "@bdavidson/browser-storage",
   "version": "0.1.0",
-  "publish": {
-    "include": ["README.md", "deno.json"],
-    "exclude": ["*.test.ts"]
-  },
+  "license": "LGPL-2.1-or-later",
   "exports": {
     "./web-storage": "./src/web-storage.ts"
   },
-  "license": "LGPL-2.1-or-later",
   "include": [
     "src/"
   ],

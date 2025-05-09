@@ -45,7 +45,7 @@ function getNameForStorageType(storageType: StorageType): string {
  * @example
  * ```ts
  * try {
- *   const storage = new WebStorage(StorageType.Session);
+ *   const storage = WebStorage.getLocal();
  * } catch (error) {
  *   if (error instanceof StorageNotAvailableError) {
  *     // Handle error
@@ -275,12 +275,12 @@ export default class WebStorage {
    * When passed a key name and value, will add that key to the storage or update that key's value if it already exists.
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * localStorage.setItem('theAnswer', 42);
    * ```
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * localStorage.setItem('key', { foo: 'bar' });
    * ```
    *
@@ -305,12 +305,12 @@ export default class WebStorage {
    * When passed a key name, will return that key's value, or `null` if the key does not exist.
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * localStorage.getItem<number>('theAnswer'); // 42
    * ```
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * localStorage.getItem<Record<string, unknown>>('key'); // { foo: 'bar' }
    * ```
    *
