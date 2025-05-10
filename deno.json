@@ -1,24 +1,29 @@
 {
   "name": "@bdavidson/browser-storage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "LGPL-2.1-or-later",
   "exports": {
-    "./web-storage": "./src/web-storage.ts"
+    "./web-storage": "./src/web-storage.ts",
+    "./indexed-db": "./src/indexed-db.ts"
   },
   "publish": {
     "include": [
       "src/",
-      "test/",
       "LICENSE",
       "README.md",
       "deno.json"
     ]
   },
   "include": [
-    "src/"
+    "src/",
+    "test/",
+    "bench/"
   ],
   "compilerOptions": {
-    "lib": ["deno.window"],
+    "lib": [
+      "dom",
+      "es2020"
+    ],
     "strict": true
   },
   "lint": {
@@ -37,8 +42,7 @@
     }
   },
   "tasks": {
-    "dev": "deno run --watch main.ts",
-    "test:unit": "deno test --coverage=\"coverage\"",
+    "test:all": "deno test --coverage=\"coverage\" src/",
     "gen-docs": "rm -rf docs && deno doc --html --output=\"docs\" src/",
     "bench": "deno bench bench/"
   },

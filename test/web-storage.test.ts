@@ -1,6 +1,8 @@
+/// <reference lib="deno.ns" />
+
 import { assertEquals } from "@std/assert";
 // import { stub, returnsNext, assertSpyCall, type Stub } from "@std/testing/mock";
-import WebStorage, {StorageType} from "../src/web-storage.ts";
+import WebStorage, { StorageType } from "../src/web-storage.ts";
 
 Deno.test("WebStorage", async (test) => {
   await test.step("Static Methods", async (test) => {
@@ -74,7 +76,7 @@ Deno.test("WebStorage", async (test) => {
       storage.setItemSync("test", "test");
       storage.clearSync();
       assertEquals(storage.length, 0);
-    })
+    });
   });
 
   await test.step("Asynchronous Item Management", async (test) => {
