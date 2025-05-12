@@ -5,10 +5,12 @@
  *
  * # Examples
  *
- * @example Using `localStorage` to persist an Object
+ * @example Using `localStorage` to persist a simple object
  * ```ts
+ * import { assertEquals } from "jsr:@std/assert@1";
+ *
  * // Define some data to store
- * interface User {
+ * interface User extends PrimitiveRecord {
  *  name: string;
  *  age: number;
  * }
@@ -17,16 +19,118 @@
  *
  * // Get the local storage instance
  * const localStorage = WebStorage.getLocal();
- * await localStorage.setItem("currentUser", john);
+ * await localStorage.store("currentUser", john);
  *
  * // Retrieve the stored data sometime later...
- * const currentUser = await localStorage.getItem<User>("currentUser");
- * console.assert(currentUser?.name === "John Doe");
+ * const currentUser = (await localStorage.load("currentUser")) as User;
+ * assertEquals(currentUser?.name, "John Doe");
+ * ```
+ *
+ * @example Store and load a class using `sessionStorage`
+ * ```ts
+ * // Define a compatible class...
+ *
+ * class User implements Storable {
+ *   public readonly typeName = "User";
+ *
+ *   public firstName: string = "";
+ *   public lastName: string = "";
+ *
+ *   public get fullName(): string {
+ *     let name = this.firstName;
+ *     if (this.lastName) name += " " + this.lastName;
+ *     return name;
+ *   }
+ *
+ *   public constructor(firstName: string, lastName: string) {
+ *     this.firstName = firstName;
+ *     this.lastName = lastName;
+ *   }
+ *
+ *   // Define the conversion methods
+ *
+ *   public intoStorage(): StorageValue {
+ *     return {
+ *       firstName: this.firstName,
+ *       lastName: this.lastName,
+ *     };
+ *   }
+ *
+ *   // Interfaces can only enforce instance variables and methods. The following
+ *   // pattern allows us to define the required function as a static method,
+ *   // then satisfy the interface by providing a function pointer via the
+ *   // `fromStorage` instance property.
+ *
+ *   private static fromStorageStatic(value: StorageValue): User {
+ *     let firstName = "";
+ *     let lastName = "";
+ *     if (isPrimitiveRecord(value)) {
+ *       if (typeof value["firstName"] === "string") firstName = value["firstName"];
+ *       if (typeof value["lastName"] === "string") lastName = value["lastName"];
+ *     }
+ *
+ *     return new User(firstName, lastName);
+ *   }
+ *
+ *   public fromStorage: FromStorage = User.fromStorageStatic;
+ * }
+ *
+ * // Use the class with WebStorage...
+ * const storedUser = new User("Test", "Testington");
+ *
+ * const sessionStorage = WebStorage.getSession();
+ * await sessionStorage.store("testUser", storedUser);
+ *
+ * const loadedUser = (await sessionStorage.load("testUser")) as User;
+ * console.assert(storedUser.fullName === loadedUser.fullName);
  * ```
  *
  * @since 0.1.0
  * @module web-storage
+ * @author Brenden Davidson <davidson.brenden15@gmail.com>
+ * @copyright Brenden Davidson 2025
  */
+
+/**
+ * A basic data type that can be either a string, number, boolean, or null.
+ */
+type Primitive = string | number | boolean | null;
+
+export function isPrimitive(value: unknown): value is Primitive {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null;
+}
+
+/**
+ * Record type which can be trivially serialized and deserialized using
+ * {@link JSON.stringify}.
+ *
+ * @since 0.2.0
+ */
+export interface PrimitiveRecord {
+  [key: string]: Primitive | PrimitiveRecord | Array<PrimitiveRecord | Primitive>;
+}
+
+export function isPrimitiveRecord(value: unknown): value is PrimitiveRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((v) => {
+      if (Array.isArray(v)) {
+        return v.every((v) => isPrimitive(v) || isPrimitiveRecord(v));
+      }
+      return isPrimitive(v) || isPrimitiveRecord(v);
+    })
+  );
+
+}
+
+/**
+ * Data which may be stored using {@link WebStorage}.
+ *
+ * @since 0.2.0
+ */
+export type StorageValue = Primitive | PrimitiveRecord | Array<Primitive | PrimitiveRecord>;
 
 /**
  * Browser storage types.
@@ -50,22 +154,8 @@ export enum StorageType {
 }
 
 /**
- * Returns the name of the storage type for use in error messages and logging.
- * @param storageType storage type enum value
- * @returns human-friendly name of the storage type
- * @internal
- */
-function getNameForStorageType(storageType: StorageType): string {
-  switch (storageType) {
-    case StorageType.Local:
-      return "Local";
-    case StorageType.Session:
-      return "Session";
-  }
-}
-
-/**
- * Error thrown when a {@link WebStorage} instance is requested for a {@link StorageType} that is not available.
+ * Error thrown when a {@link WebStorage} instance is requested for a
+ * {@link StorageType} that is not available.
  *
  * @example
  * ```ts
@@ -85,17 +175,126 @@ export class StorageNotAvailableError extends Error {
   /** The storage type that was requested. */
   public readonly storageType: StorageType;
 
+  /** Message describing the error */
+  override get message(): string {
+    let name: string;
+    switch (this.storageType) {
+      case StorageType.Local:
+        name = "Local";
+        break;
+      case StorageType.Session:
+        name = "Session";
+        break;
+    }
+
+    return `Storage of type, '${name}', is not available.`;
+  }
+
   /**
    * Creates a new instance of {@link StorageNotAvailableError}.
    *
    * @param storageType storage type that was requested
    */
   public constructor(storageType: StorageType) {
-    const storageTypeName = getNameForStorageType(storageType);
-    const message = `Storage of type, '${storageTypeName}', is not available.`;
-    super(message);
+    super();
     this.storageType = storageType;
   }
+}
+
+/**
+ * A {@link Storable} object instance method which produces a
+ * WebStorage-compatible {@link StorageValue} type.
+ *
+ * @returns a WebStorage-compatible representation of the {@link Storable}
+ * instance
+ *
+ * @since 0.2.0
+ */
+export type IntoStorage = () => StorageValue;
+
+/**
+ * Converts a {@link StorageValue} object into a {@link Storable} instance.
+ *
+ * @param value WebStorage-compatible value to retrieve data from
+ * @returns new {@link Storable} instance built from the stored value
+ *
+ * @since 0.2.0
+ */
+export type FromStorage = (value: StorageValue) => Storable;
+
+/**
+ * Interface representing conversion functions for transforming between
+ * {@link Storable} objects and {@link StorageValue} types that are compatible
+ * with {@link WebStorage}.
+ *
+ * @since 0.2.0
+ */
+interface ConversionFunctions {
+  /**
+   * Function used to convert a {@link Storable} object into a
+   * WebStorage-compatible {@link StorageValue} type.
+   *
+   * @see IntoStorage
+   * @since 0.2.0
+   */
+  readonly intoStorage: IntoStorage;
+
+  /**
+   * Function used to convert a {@link StorageValue} object into a
+   * {@link Storable} instance.
+   *
+   * @see FromStorage
+   * @since 0.2.0
+   */
+  readonly fromStorage: FromStorage;
+}
+
+function isConversionFunctions(value: unknown): value is ConversionFunctions {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "intoStorage" in value &&
+    typeof (value as ConversionFunctions).intoStorage === "function" &&
+    "fromStorage" in value &&
+    typeof (value as ConversionFunctions).fromStorage === "function"
+  );
+}
+
+/**
+ * Object which may be converted into a WebStorage-compatible format and back.
+ */
+export interface Storable extends ConversionFunctions {
+  /**
+   * Name to provide to WebStorage so that it may call the correct functions
+   * when storing and loading this object.
+   */
+  readonly typeName: string;
+}
+
+/**
+ * Confirm if a value conforms to the {@link Storable} type.
+ *
+ * @param value value to check
+ * @returns `true` if the value conforms; `false` otherwise
+ */
+export function isStorable(value: unknown): value is Storable {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "typeName" in value &&
+    typeof (value as Storable).typeName === "string" &&
+    isConversionFunctions(value)
+  );
+}
+
+interface StorageMetadata {
+  /** The type of data stored in this item */
+  readonly itemType: string | null;
+}
+
+interface StorageItem extends StorageMetadata {
+  /** The actual data stored in this item */
+  readonly value: StorageValue;
 }
 
 /**
@@ -103,8 +302,10 @@ export class StorageNotAvailableError extends Error {
  *
  * @example Using `localStorage` to persist an Object
  * ```ts
+ * import { assertEquals } from "jsr:@std/assert@1";
+ *
  * // Define some data to store
- * interface User {
+ * interface User extends PrimitiveRecord {
  *  name: string;
  *  age: number;
  * }
@@ -113,11 +314,11 @@ export class StorageNotAvailableError extends Error {
  *
  * // Get the local storage instance
  * const localStorage = WebStorage.getLocal();
- * await localStorage.setItem("currentUser", john);
+ * await localStorage.store("currentUser", john);
  *
  * // Retrieve the stored data sometime later...
- * const currentUser = await localStorage.getItem<User>("currentUser");
- * console.assert(currentUser?.name === "John Doe");
+ * const currentUser = (await localStorage.load("currentUser")) as User;
+ * assertEquals(currentUser?.name, "John Doe");
  * ```
  *
  * @since 0.1.0
@@ -126,7 +327,7 @@ export default class WebStorage {
   /**
    * Tests whether a given {@link StorageType} is available in the current context.
    *
-   * @param storage {@link Storage} object to test
+   * @param storage {@link StorageValue} object to test
    * @returns `true` if the storage type is available, `false` otherwise
    * @throws Error when an unexpected error occurs
    *
@@ -281,7 +482,17 @@ export default class WebStorage {
   }
 
   /**
+   * Mapping of {@link Storable.typeName} values to their respective
+   * {@link FromStorage} functions.
+   *
+   * @private
+   * @internal
+   */
+  private readonly conversionMap: Map<string, FromStorage> = new Map();
+
+  /**
    * Set of keys in the storage instance.
+   *
    * @private
    * @internal
    */
@@ -320,80 +531,87 @@ export default class WebStorage {
   /**
    * Returns `true` if a given key is present in the storage instance.
    *
-   * @param key key to check
+   * @param key - key to check
    * @returns `true` if the key is present, `false` otherwise
    */
   public hasKey(key: string): boolean {
     return this.keys.has(key);
   }
 
-  /**
-   * When passed a key name and value, will add that key to the storage or update that key's value if it already exists.
-   *
-   * This is the synchronous version of {@link setItem}.
-   *
-   * @example Set a primitive value
-   * ```ts ignore
-   * localStorage.setItemSync('theAnswer', 42);
-   * ```
-   *
-   * @example Set an object value
-   * ```ts ignore
-   * localStorage.setItemSync('key', { foo: 'bar' });
-   * ```
-   *
-   * @remarks
-   * `value` is fed through {@link JSON.stringify} before being stored.
-   *
-   * @param key name of the key to create or update
-   * @param value the value to store or overwrite
-   *
-   * @throws DOMException `QuotaExceededError` if the storage quota has been met.
-   * @throws TypeError in one of the following cases:
-   *   - `value` contains a circular reference
-   *   - a {@link BigInt} value is somewhere within `value`
-   */
-  public setItemSync<T>(key: string, value: T): void {
-    const stringifiedValue = JSON.stringify(value);
-    this.storage.setItem(key, stringifiedValue);
-    this.keys.add(key);
+  private static makeStorageItem<T extends Storable>(value: T | StorageValue): StorageItem {
+    const isStorableType = isStorable(value);
+    const itemType = isStorableType ? value.typeName : null;
+    const itemValue = isStorableType ? value.intoStorage() : value;
+
+    return {
+      itemType,
+      value: itemValue,
+    };
   }
 
   /**
-   * When passed a key name and value, will add that key to the storage or update that key's value if it already exists.
-   *
-   * Asynchronous version of {@link setItemSync}.
-   *
-   * @example Set a primitive value
-   * ```ts ignore
-   * await localStorage.setItem('theAnswer', 42);
-   * ```
-   *
-   * @example Set an object value and catch any errors
-   * ```ts ignore
-   * localStorage.setItem('key', { foo: 'bar' })
-   *  .catch((error) => {
-   *    if (error instanceof DOMException) {
-   *       console.error("Quota exceeded");
-   *     }
-   *  });
-   * ```
+   * When passed a key name and value, will add that key to the storage or
+   * update that key's value if it already exists.
    *
    * @remarks
-   * `value` is fed through {@link JSON.stringify} before being stored.
+   * This is the synchronous version of {@link WebStorage.store}.
    *
-   * @param key name of the key to create or update
-   * @param value the value to store or overwrite
+   * @example Set a primitive value
+   * ```ts
+   * const localStorage = WebStorage.getLocal();
+   * localStorage.storeSync('theAnswer', 42);
+   * ```
+   *
+   * @example Set a simple object value
+   * ```ts
+   * const localStorage = WebStorage.getLocal();
+   * localStorage.storeSync('fooBar', { foo: 'bar' });
+   * ```
+   *
+   * @param key - name of the key to create or update
+   * @param value - the value to store or overwrite
    *
    * @throws DOMException `QuotaExceededError` if the storage quota has been met.
-   * @throws TypeError in one of the following cases:
-   *   - `value` contains a circular reference
-   *   - a {@link BigInt} value is somewhere within `value`
    */
-  public setItem<T>(key: string, value: T): Promise<void> {
+  public storeSync<T extends Storable>(key: string, value: T | StorageValue): void {
+    const item = WebStorage.makeStorageItem(value);
+
+    this.storage.setItem(key, JSON.stringify(item));
+    this.keys.add(key);
+    if (isStorable(value)) {
+      // Add or update conversion functions
+      this.conversionMap.set(value.typeName, value.fromStorage);
+    }
+  }
+
+  /**
+   * When passed a key name and value, will add that key to the storage or
+   * update that key's value if it already exists.
+   *
+   * @remarks
+   * This is the asynchronous version of {@link WebStorage.storeSync}.
+   *
+   * @example Set a primitive value
+   * ```ts
+   * const localStorage = WebStorage.getLocal();
+   * await localStorage.store('theAnswer', 42);
+   * ```
+   *
+   * @example Set a simple object value
+   * ```ts
+   * const localStorage = WebStorage.getLocal();
+   * await localStorage.store('fooBar', { foo: 'bar' });
+   *```
+   *
+   * @param key - name of the key to create or update
+   * @param value - the value to store or overwrite
+   *
+   * @throws DOMException `QuotaExceededError` if the storage quota has been met.
+   */
+  public store<T extends Storable>(key: string, value: T | StorageValue): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.setItemSync(key, value);
+        this.storeSync(key, value);
         resolve();
       } catch (error) {
         reject(error);
@@ -402,53 +620,111 @@ export default class WebStorage {
   }
 
   /**
-   * When passed a key name, will return that key's value, or `null` if the key does not exist.
+   * When passed a key name, will load that key's value from storage into the
+   * target data type or return `null` if the key does not exist.
    *
-   * Synchronous version of {@link getItem}.
+   * @remarks
+   * Synchronous version of {@link WebStorage.load}.
    *
-   * @example Get a primitive value
-   * ```ts ignore
-   * localStorage.getItemSync<number>('theAnswer'); // 42
+   * @example Load a primitive value
+   * ```ts
+   * const localStorage = WebStorage.getLocal();
+   * const theAnswer = localStorage.loadSync("theAnswer");
    * ```
    *
-   * @example Get an object value
-   * ```ts ignore
-   * localStorage.getItemSync<Record<string, unknown>>('key'); // { foo: 'bar' }
+   * @example Load a simple object
+   * ```ts
+   * interface User {
+   *  id: number;
+   *  name: {
+   *    first: string;
+   *    middle?: string;
+   *    last: string;
+   *  };
+   *  friendIDs: number[];
+   * }
+   *
+   * const localStorage = WebStorage.getLocal();
+   * const testUser = localStorage.loadSync("testUser");
+   * // {
+   * //   id: 0,
+   * //   name: {
+   * //     first: "Test",
+   * //     last: "Testington",
+   * //   },
+   * //   friendIDs: [1, 5]
+   * // }
    * ```
    *
-   * @param key name of the key to retrieve the value of
-   * @returns the value of the key, or `null` if the key does not exist
+   * @param key name of the key to load the value for
+   *
+   * @returns the value of the key loaded into the target data type, or `null`
+   * if the key does not exist
    */
-  public getItemSync<T>(key: string): T | null {
+  public loadSync(key: string): Storable | StorageValue | null {
+    // Check for key existence without asking the browser.
     if (!this.hasKey(key)) return null;
 
-    const stringifiedValue = this.storage.getItem(key)!;
-    return JSON.parse(stringifiedValue);
+    const stringifiedValue = this.storage.getItem(key)!; // This should never return `null` since we've confirmed that the key exists.
+
+    const item: StorageItem = JSON.parse(stringifiedValue);
+    if (item.itemType === null) {
+      // No conversion function, just return the value as-is
+      return item.value;
+    }
+
+    const fromStorage = this.conversionMap.get(item.itemType);
+    return fromStorage ? fromStorage(item.value) : item.value;
   }
 
   /**
-   * When passed a key name, will return that key's value, or `null` if the key does not exist.
+   * When passed a key name, will load that key's value from storage into the
+   * target data type or return `null` if the key does not exist.
    *
-   * Asynchronous version of {@link getItemSync}.
+   * @remarks
+   * Asynchronous version of {@link WebStorage.loadSync}.
    *
-   * @example Get a primitive value
-   * ```ts ignore
-   * const theAnswer = await localStorage.getItem<number>('theAnswer'); // 42
+   * @example Load a primitive value
+   * ```ts
+   * const localStorage = WebStorage.getLocal();
+   * const theAnswer = await localStorage.load("theAnswer");
+   *
+   * console.log("The answer is " + theAnswer + "."); // Prints: "The answer is 42."
    * ```
    *
-   * @example Get an object value
+   * @example Load a simple object
+   * ```ts
+   * interface User {
+   *  id: number;
+   *  name: {
+   *    first: string;
+   *    middle?: string;
+   *    last: string;
+   *  };
+   *  friendIDs: number[];
+   * }
    *
-   * ```ts ignore
-   * const fooBar = await localStorage.getItem<Record<string, unknown>>('key'); // { foo: 'bar' }
+   * const localStorage = WebStorage.getLocal();
+   * const testUser = await localStorage.load("testUser");
+   * // {
+   * //   id: 0,
+   * //   name: {
+   * //     first: "Test",
+   * //     last: "Testington",
+   * //   },
+   * //   friendIDs: [1, 5]
+   * // }
    * ```
    *
-   * @param key name of the key to retrieve the value of
-   * @returns the value of the key, or `null` if the key does not exist
+   * @param key name of the key to load the value for
+   *
+   * @returns the value of the key loaded into the target data type, or `null`
+   * if the key does not exist
    */
-  public getItem<T>(key: string): Promise<T | null> {
+  public load(key: string): Promise<Storable | StorageValue | null> {
     return new Promise((resolve, reject) => {
       try {
-        const value = this.getItemSync<T>(key);
+        const value = this.loadSync(key);
         resolve(value);
       } catch (error) {
         reject(error);

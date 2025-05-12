@@ -1,40 +1,68 @@
-/// <reference lib="deno.ns" />
+import { assertEquals, assert } from "jsr:@std/assert@1";
+import { spy } from "jsr:@std/testing@1/mock";
+import WebStorage, {
+  FromStorage, isPrimitiveRecord,
+  isStorable,
+  Storable,
+  StorageType, StorageValue
+} from "../src/web-storage.ts";
 
-import { assertEquals } from "@std/assert";
-// import { stub, returnsNext, assertSpyCall, type Stub } from "@std/testing/mock";
-import WebStorage, { StorageType } from "../src/web-storage.ts";
+class User implements Storable {
+  public readonly typeName = "User";
+
+  public firstName: string = "";
+  public lastName: string = "";
+
+  public get fullName(): string {
+    let name = this.firstName;
+    if (this.lastName) name += " " + this.lastName;
+    return name;
+  }
+
+  public constructor(firstName: string, lastName: string) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+  }
+
+  // Define the conversion methods
+
+  public intoStorage(): StorageValue {
+    return {
+      firstName: this.firstName,
+      lastName: this.lastName,
+    };
+  }
+
+  // Interfaces can only enforce instance variables and methods. The following
+  // pattern allows us to define the required function as a static method,
+  // then satisfy the interface by providing a function pointer via the
+  // `fromStorage` instance property.
+
+  private static fromStorageStatic(value: StorageValue): User {
+    let firstName = "";
+    let lastName = "";
+    if (isPrimitiveRecord(value)) {
+      if (typeof value["firstName"] === "string") firstName = value["firstName"];
+      if (typeof value["lastName"] === "string") lastName = value["lastName"];
+    }
+
+    return new User(firstName, lastName);
+  }
+
+  public fromStorage: FromStorage = User.fromStorageStatic;
+}
 
 Deno.test("WebStorage", async (test) => {
   await test.step("Static Methods", async (test) => {
     await test.step("localIsAvailable()", async (test) => {
       await test.step("should return `true` when localStorage is available", () => {
-        assertEquals(WebStorage.localIsAvailable(), true);
+        assert(WebStorage.localIsAvailable());
       });
-
-      // await test.step("should return `false` when localStorage cannot be used", () => {
-      //   using setItemStub = stub(
-      //     self.localStorage,
-      //     "setItem",
-      //     () => {
-      //       throw new DOMException("test", "QuotaExceededError");
-      //     },
-      //   );
-      //
-      //   const isAvailable = WebStorage.localIsAvailable();
-      //   assertSpyCall(setItemStub, 0, {
-      //     args: ["test", "test"],
-      //     error: {
-      //       Class: DOMException,
-      //     }
-      //   });
-      //
-      //   assertEquals(isAvailable, false);
-      // });
     });
 
     await test.step("sessionIsAvailable()", async (test) => {
       await test.step("should return `true` when sessionStorage is available", () => {
-        assertEquals(WebStorage.sessionIsAvailable(), true);
+        assert(WebStorage.sessionIsAvailable());
       });
     });
   });
@@ -42,13 +70,13 @@ Deno.test("WebStorage", async (test) => {
   await test.step("Instantiation", async (test) => {
     await test.step("getLocal() should instantiate and return a WebStorage instance", () => {
       const storage = WebStorage.getLocal();
-      assertEquals(storage instanceof WebStorage, true);
+      assert(storage instanceof WebStorage);
       assertEquals(storage.storageType, StorageType.Local);
     });
 
     await test.step("getSession() should instantiate and return a WebStorage instance", () => {
       const storage = WebStorage.getSession();
-      assertEquals(storage instanceof WebStorage, true);
+      assert(storage instanceof WebStorage);
       assertEquals(storage.storageType, StorageType.Session);
     });
   });
@@ -57,23 +85,37 @@ Deno.test("WebStorage", async (test) => {
     const storage = WebStorage.getSession();
     storage.clearSync();
 
-    await test.step("setting and getting items should work as expected", () => {
-      storage.setItemSync("test", "test");
+    await test.step("storing and loading primitive items should work as expected", () => {
+      storage.storeSync("test", "test");
       assertEquals(storage.length, 1);
-      assertEquals(storage.hasKey("test"), true);
-      assertEquals(storage.getItemSync<string>("test"), "test");
+      assert(storage.hasKey("test"));
+      assertEquals(storage.loadSync("test"), "test");
+    });
+
+    await test.step("storing and loading class instances should work as expected", () => {
+      const user = new User("Test", "Testington");
+      const intoStorageSpy = spy(user, "intoStorage");
+      const fromStorageSpy = spy(user, "fromStorage");
+
+      storage.storeSync("user", user);
+      assertEquals(intoStorageSpy.calls.length, 1, "intoStorage() should have been called once" );
+      assert(storage.hasKey("user"));
+
+      const loadedUser = storage.loadSync("user");
+      assertEquals(fromStorageSpy.calls.length, 1, "fromStorage() should have been called once");
+      assert(loadedUser instanceof User, "loadedUser should be an instance of User");
+      assertEquals((loadedUser as User).fullName, user.fullName, "loadedUser should have the same fullName as user");
     });
 
     await test.step("removing items should work as expected", () => {
-      storage.setItemSync("test", "test");
+      storage.storeSync("test", "test");
       storage.removeItemSync("test");
-      assertEquals(storage.length, 0);
-      assertEquals(storage.hasKey("test"), false);
-      assertEquals(storage.getItemSync<string>("test"), null);
+      assert(!storage.hasKey("test"));
+      assertEquals(storage.loadSync("test"), null);
     });
 
     await test.step("clearing storage should work as expected", () => {
-      storage.setItemSync("test", "test");
+      storage.storeSync("test", "test");
       storage.clearSync();
       assertEquals(storage.length, 0);
     });
@@ -88,22 +130,23 @@ Deno.test("WebStorage", async (test) => {
 
       const setItemPromises = [];
       for (let i = 1; i <= itemCount; i++) {
-        setItemPromises.push(storage.setItem("test" + i, i));
+        setItemPromises.push(storage.store("test" + i, i));
       }
 
       await Promise.all(setItemPromises);
 
       assertEquals(storage.length, itemCount);
       for (let i = 1; i <= itemCount; i++) {
-        const value = await storage.getItem<number>("test" + i);
+        const value = await storage.load("test" + i);
+        assert(!isStorable(value));
         assertEquals(value, i);
       }
     });
 
     await test.step("removing items should work as expected", async () => {
-      await storage.setItem("test", "test");
+      await storage.store("test", "test");
       await storage.removeItem("test");
-      assertEquals(storage.hasKey("test"), false);
+      assert(!storage.hasKey("test"));
     });
   });
 });

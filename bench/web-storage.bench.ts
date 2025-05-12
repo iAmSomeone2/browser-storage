@@ -14,7 +14,7 @@ Deno.bench("WebStorage: insert large value (sync)", {
 }, (bench) => {
   storage.clearSync();
   bench.start();
-  storage.setItemSync("test", testItem);
+  storage.storeSync("test", testItem);
   bench.end();
 });
 
@@ -26,7 +26,7 @@ Deno.bench("WebStorage: insert large value (async)", {
   // deno-lint-ignore prefer-const
   let setItemPromise: Promise<void>;
   bench.start();
-  setItemPromise = storage.setItem("test", testItem);
+  setItemPromise = storage.store("test", testItem);
   bench.end();
   await setItemPromise;
 });

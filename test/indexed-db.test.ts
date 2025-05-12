@@ -1,6 +1,4 @@
-/// <reference lib="deno.ns" />
-
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "jsr:@std/assert@1";
 import IndexedDB, {
   IndexedDBError,
   IndexedDBErrorKind,
