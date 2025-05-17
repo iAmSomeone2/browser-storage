@@ -1,4 +1,4 @@
-import WebStorage from "../src/web-storage.ts";
+import WebStorage from "../src/web_storage.ts";
 
 const storage = WebStorage.getSession();
 const itemCount = 500_000;
@@ -14,7 +14,7 @@ Deno.bench("WebStorage: insert large value (sync)", {
 }, (bench) => {
   storage.clearSync();
   bench.start();
-  storage.setItemSync("test", testItem);
+  storage.storeSync("test", testItem);
   bench.end();
 });
 
@@ -23,10 +23,8 @@ Deno.bench("WebStorage: insert large value (async)", {
   baseline: true,
 }, async (bench) => {
   await storage.clear();
-  // deno-lint-ignore prefer-const
-  let setItemPromise: Promise<void>;
   bench.start();
-  setItemPromise = storage.setItem("test", testItem);
+  const setItemPromise = storage.store("test", testItem);
   bench.end();
   await setItemPromise;
 });
