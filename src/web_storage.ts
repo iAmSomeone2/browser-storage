@@ -97,7 +97,8 @@
 type Primitive = string | number | boolean | null;
 
 export function isPrimitive(value: unknown): value is Primitive {
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null;
+  return typeof value === "string" || typeof value === "number" ||
+    typeof value === "boolean" || value === null;
 }
 
 /**
@@ -107,7 +108,10 @@ export function isPrimitive(value: unknown): value is Primitive {
  * @since 0.2.0
  */
 export interface PrimitiveRecord {
-  [key: string]: Primitive | PrimitiveRecord | Array<PrimitiveRecord | Primitive>;
+  [key: string]:
+    | Primitive
+    | PrimitiveRecord
+    | Array<PrimitiveRecord | Primitive>;
 }
 
 export function isPrimitiveRecord(value: unknown): value is PrimitiveRecord {
@@ -122,7 +126,6 @@ export function isPrimitiveRecord(value: unknown): value is PrimitiveRecord {
       return isPrimitive(v) || isPrimitiveRecord(v);
     })
   );
-
 }
 
 /**
@@ -130,7 +133,10 @@ export function isPrimitiveRecord(value: unknown): value is PrimitiveRecord {
  *
  * @since 0.2.0
  */
-export type StorageValue = Primitive | PrimitiveRecord | Array<Primitive | PrimitiveRecord>;
+export type StorageValue =
+  | Primitive
+  | PrimitiveRecord
+  | Array<Primitive | PrimitiveRecord>;
 
 /**
  * Browser storage types.
@@ -538,7 +544,9 @@ export default class WebStorage {
     return this.keys.has(key);
   }
 
-  private static makeStorageItem<T extends Storable>(value: T | StorageValue): StorageItem {
+  private static makeStorageItem<T extends Storable>(
+    value: T | StorageValue,
+  ): StorageItem {
     const isStorableType = isStorable(value);
     const itemType = isStorableType ? value.typeName : null;
     const itemValue = isStorableType ? value.intoStorage() : value;
@@ -573,7 +581,10 @@ export default class WebStorage {
    *
    * @throws DOMException `QuotaExceededError` if the storage quota has been met.
    */
-  public storeSync<T extends Storable>(key: string, value: T | StorageValue): void {
+  public storeSync<T extends Storable>(
+    key: string,
+    value: T | StorageValue,
+  ): void {
     const item = WebStorage.makeStorageItem(value);
 
     this.storage.setItem(key, JSON.stringify(item));
@@ -601,14 +612,17 @@ export default class WebStorage {
    * ```ts
    * const localStorage = WebStorage.getLocal();
    * await localStorage.store('fooBar', { foo: 'bar' });
-   *```
+   * ```
    *
    * @param key - name of the key to create or update
    * @param value - the value to store or overwrite
    *
    * @throws DOMException `QuotaExceededError` if the storage quota has been met.
    */
-  public store<T extends Storable>(key: string, value: T | StorageValue): Promise<void> {
+  public store<T extends Storable>(
+    key: string,
+    value: T | StorageValue,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         this.storeSync(key, value);

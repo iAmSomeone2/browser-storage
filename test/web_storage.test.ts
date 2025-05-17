@@ -1,11 +1,13 @@
-import { assertEquals, assert } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import { spy } from "jsr:@std/testing@1/mock";
 import WebStorage, {
-  FromStorage, isPrimitiveRecord,
+  FromStorage,
+  isPrimitiveRecord,
   isStorable,
   Storable,
-  StorageType, StorageValue
-} from "../src/web-storage.ts";
+  StorageType,
+  StorageValue,
+} from "../src/web_storage.ts";
 
 class User implements Storable {
   public readonly typeName = "User";
@@ -42,7 +44,9 @@ class User implements Storable {
     let firstName = "";
     let lastName = "";
     if (isPrimitiveRecord(value)) {
-      if (typeof value["firstName"] === "string") firstName = value["firstName"];
+      if (typeof value["firstName"] === "string") {
+        firstName = value["firstName"];
+      }
       if (typeof value["lastName"] === "string") lastName = value["lastName"];
     }
 
@@ -98,13 +102,28 @@ Deno.test("WebStorage", async (test) => {
       const fromStorageSpy = spy(user, "fromStorage");
 
       storage.storeSync("user", user);
-      assertEquals(intoStorageSpy.calls.length, 1, "intoStorage() should have been called once" );
+      assertEquals(
+        intoStorageSpy.calls.length,
+        1,
+        "intoStorage() should have been called once",
+      );
       assert(storage.hasKey("user"));
 
       const loadedUser = storage.loadSync("user");
-      assertEquals(fromStorageSpy.calls.length, 1, "fromStorage() should have been called once");
-      assert(loadedUser instanceof User, "loadedUser should be an instance of User");
-      assertEquals((loadedUser as User).fullName, user.fullName, "loadedUser should have the same fullName as user");
+      assertEquals(
+        fromStorageSpy.calls.length,
+        1,
+        "fromStorage() should have been called once",
+      );
+      assert(
+        loadedUser instanceof User,
+        "loadedUser should be an instance of User",
+      );
+      assertEquals(
+        (loadedUser as User).fullName,
+        user.fullName,
+        "loadedUser should have the same fullName as user",
+      );
     });
 
     await test.step("removing items should work as expected", () => {

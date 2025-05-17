@@ -1,8 +1,8 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import IndexedDB, {
+import Indexed_db, {
   IndexedDBError,
   IndexedDBErrorKind,
-} from "../src/indexed-db.ts";
+} from "../src/indexed_db.ts";
 
 Deno.test("IndexedDBError", async (test) => {
   const testCases = [
@@ -26,10 +26,10 @@ Deno.test("IndexedDBError", async (test) => {
   }
 });
 
-// TODO: Determine how to unit test IndexedDB
-// Deno.test("IndexedDB", async (test) => {
+// TODO: Determine how to unit test Indexed_db
+// Deno.test("Indexed_db", async (test) => {
 //   await test.step("can open a new database without error", async () => {
-//     const db = new IndexedDB();
+//     const db = new Indexed_db();
 //
 //     await db.open("test");
 //   });

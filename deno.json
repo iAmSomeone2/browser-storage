@@ -4,8 +4,8 @@
   "license": "LGPL-2.1-or-later",
   "exports": {
     ".": "./src/mod.ts",
-    "./web-storage": "./src/web-storage.ts",
-    "./indexed-db": "./src/indexed-db.ts"
+    "./web_storage": "./src/web_storage.ts",
+    "./indexed_db": "./src/indexed_db.ts"
   },
   "publish": {
     "include": [
@@ -24,7 +24,7 @@
     "lib": [
       "deno.ns",
       "dom",
-      "es2020"
+      "es2024"
     ],
     "strict": true
   },
